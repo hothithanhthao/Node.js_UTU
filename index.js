@@ -3,46 +3,40 @@ const app = express()
 const bodyParser = require('body-parser')
 const cors = require('cors')
 
-const port = process.env.PORT || 3002
-let persons = [
-    {
-        "name": "Arto Hellas",
-        "number": "040-123456",
-        "id": 1
-      },
-      {
-        "name": "Martti Tienari",
-        "number": "040-123456",
-        "id": 2
-      },
-      {
-        "name": "Arto Järvinen",
-        "number": "060-123456",
-        "id": 3
-      },
-      {
-        "name": "Lea Kutvonen",
-        "number": "040-123456",
-        "id": 4
-      }
-]
+const Person = require('./models/person')
 
+const port = process.env.PORT || 3002
 
   app.use(bodyParser.json())
+  app.use(express.static('build'))
   app.use(cors())
 
+  const formatPerson= (person) => {
+    return {
+      name: person.name,
+      number: person.number,
+      id: person._id
+    }
+  }
+
+
   app.get('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    const person = persons.find(person => person.id === id)
-    if ( person ) {
-        response.json(person)
-      } else {
-        response.status(404).end()
-      }
+
+    Person
+    .findById(request.params.id)
+    .then(person => {
+      response.json(formatPerson(person))
+    })
+     
   })
   
-  app.get('/api/persons', (req, res) => {
-    res.json(persons)
+  
+  app.get('/api/persons', (request, response) => {
+    Person
+    .find({})
+    .then(persons => {
+      response.json(persons.map(formatPerson))
+    })
   })
   
   
@@ -53,11 +47,6 @@ let persons = [
     return random
   }
 
-  const generateId = () => {
-    const maxId = persons.length > 0 ? persons.map(n => n.id).sort().reverse()[0] : 1
-    return maxId + 1
-  }
-
   app.post('/api/persons', (request, response) => {
   const body = request.body
 
@@ -65,22 +54,37 @@ let persons = [
     return response.status(400).json({ error: 'content missing' })
   }
 
-  const person = {
+  const person = new Person({
     name: body.name,
-    number: "040-"+generatePhoneNumber().toString(),
-    id: generateId()
-  }
+    number: "040-"+generatePhoneNumber().toString()
+    
+  })
 
-  persons = persons.concat(person)
-
-  response.json(person)
+  person
+    .save()
+    .then(formatPerson)
+    .then(savedAndFormattedPerson => {
+      response.json(savedAndFormattedPerson)
+    })
 })
 
   app.delete('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    persons = persons.filter(note => note.id !== id)
 
-    response.status(204).end()
+    Person
+    .findByIdAndRemove(request.params.id)
+    .then(result => {
+      response.status(204).end()
+    })
+    .catch(error => {
+      response.status(400).send({ error: 'malformatted id' })
+    })
+
   })
 
+  const error = (request, response) => {
+    response.status(404).send({ error: 'unknown endpoint' })
+  }
+  
+  app.use(error)
+  
   app.listen(port, () => console.log(`Listening on port ${port}`));
